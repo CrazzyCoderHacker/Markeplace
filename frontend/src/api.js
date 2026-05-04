@@ -252,3 +252,56 @@ export async function resetPassword(email, code, newPassword) {
   if (!res.ok) throw new Error(`Error ${res.status}`);
   return res.json();
 }
+
+/**
+ * Imágenes de publicaciones
+ * Endpoint: POST /post-images
+ */
+export async function createPostImage(data) {
+  const res = await fetch(`${API_URL}/post-images`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `Error ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Crear boleto
+ * Endpoint: POST /tickets
+ */
+export async function createTicket(data) {
+  const res = await fetch(`${API_URL}/tickets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Registrar venta de boleto
+ * Endpoint: POST /ticket-sales
+ */
+export async function createTicketSale(data) {
+  const res = await fetch(`${API_URL}/ticket-sales`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `Error ${res.status}`);
+  }
+  return res.json();
+}

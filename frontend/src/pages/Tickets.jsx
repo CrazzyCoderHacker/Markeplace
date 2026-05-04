@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getTicketDetail, getTickets } from '../api'
+import { getTicketDetail, getTickets, createTicket, createTicketSale } from '../api'
 import { useAuth } from '../context/AuthContext'
 import Loader from '../components/Loader'
 import Icon from '../components/Icon'
@@ -23,11 +23,35 @@ export default function Tickets() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+
   const [searchId, setSearchId] = useState(id || '')
   const [ticket, setTicket] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticketsList, setTicketsList] = useState([])
+
+  const [ticketForm, setTicketForm] = useState({
+    event_id: 1,
+    owner_id: user?.id || 1,
+    subject: '',
+    status: 'available',
+  })
+
+  const [saleForm, setSaleForm] = useState({
+    ticket_id: '',
+    buyer_user_id: '',
+    price: '',
+    currency: 'MXN',
+    status: 'pending',
+  })
+
+  const [successMessage, setSuccessMessage] = useState('')
+
+  useEffect(() => {
+    if (!successMessage) return
+    const timer = setTimeout(() => setSuccessMessage(''), 6000)
+    return () => clearTimeout(timer)
+  }, [successMessage])
 
   const fetchTicket = async (ticketId) => {
     if (!ticketId) return
@@ -36,7 +60,8 @@ export default function Tickets() {
     setTicket(null)
     try {
       const result = await getTicketDetail(ticketId)
-      setTicket(result.data)
+      const parsed = result?.data !== undefined ? result.data : result
+      setTicket(parsed)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -51,12 +76,18 @@ export default function Tickets() {
     }
   }, [id])
 
-  // Si no hay id, cargamos lista de boletos (comportamiento tipo "My Tickets")
   useEffect(() => {
     if (!id) {
       fetchTicketsList()
     }
   }, [id, user])
+
+  useEffect(() => {
+    setTicketForm((prev) => ({
+      ...prev,
+      owner_id: user?.id || 1,
+    }))
+  }, [user])
 
   const fetchTicketsList = async () => {
     setLoading(true)
@@ -64,11 +95,7 @@ export default function Tickets() {
     try {
       const res = await getTickets()
       const parsed = res.data !== undefined ? res.data : res
-      // Si tenemos usuario, filtrar por vendedor/autor; si no, mostrar todo
-      let list = Array.isArray(parsed) ? parsed : [parsed]
-      if (user && (list.length > 0)) {
-        list = list.filter(t => String(t.seller_id) === String(user.id) || String(t.author_user_id) === String(user.id))
-      }
+      const list = Array.isArray(parsed) ? parsed : [parsed]
       setTicketsList(list)
     } catch (err) {
       setError(err.message)
@@ -84,27 +111,174 @@ export default function Tickets() {
     }
   }
 
-  const soldCount = ticketsList.filter(t => t.estado_venta === 'completed').length
-  const pendingCount = ticketsList.filter(t => t.estado_venta !== 'completed').length
-  const amountPaid = ticketsList
-    .filter(t => t.estado_venta === 'completed')
-    .reduce((acc, t) => acc + Number(t.amount || t.price || 0), 0)
-  const amountOwed = ticketsList
-    .filter(t => t.estado_venta !== 'completed')
-    .reduce((acc, t) => acc + Number(t.amount || t.price || 0), 0)
+  const handleTicketFormChange = (key) => (e) => {
+    setTicketForm((prev) => ({ ...prev, [key]: e.target.value }))
+  }
+
+  const handleSaleFormChange = (key) => (e) => {
+    setSaleForm((prev) => ({ ...prev, [key]: e.target.value }))
+  }
+
+  const handleCreateTicket = async (e) => {
+    e.preventDefault()
+    setError(null)
+    setSuccessMessage('')
+
+    try {
+      const result = await createTicket({
+        event_id: Number(ticketForm.event_id),
+        owner_id: Number(ticketForm.owner_id),
+        subject: ticketForm.subject,
+        status: ticketForm.status,
+      })
+
+      const created = result?.data ?? result
+
+      setSuccessMessage(`Boleto creado correctamente. ID: ${created?.id ?? 'N/A'}`)
+
+      setTicketForm({
+        event_id: 1,
+        owner_id: user?.id || 1,
+        subject: '',
+        status: 'available',
+      })
+
+      await fetchTicketsList()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (err) {
+      setError(err.message || 'No se pudo crear el boleto')
+    }
+  }
+
+  const handleCreateSale = async (e) => {
+    e.preventDefault()
+    setError(null)
+    setSuccessMessage('')
+
+    try {
+      const result = await createTicketSale({
+        ticket_id: Number(saleForm.ticket_id),
+        buyer_user_id: Number(saleForm.buyer_user_id),
+        price: Number(saleForm.price),
+        currency: saleForm.currency,
+        status: saleForm.status,
+      })
+
+      const created = result?.data ?? result
+
+      setSuccessMessage(`Venta registrada correctamente. ID: ${created?.id ?? 'N/A'}`)
+
+      setSaleForm({
+        ticket_id: '',
+        buyer_user_id: '',
+        price: '',
+        currency: 'MXN',
+        status: 'pending',
+      })
+
+      await fetchTicketsList()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (err) {
+      setError(err.message || 'No se pudo registrar la venta')
+    }
+  }
+
+  const soldCount = ticketsList.filter(t => t.status === 'sold' || t.estado_venta === 'completed').length
+  const pendingCount = ticketsList.filter(t => !(t.status === 'sold' || t.estado_venta === 'completed')).length
 
   return (
     <div className="page" id="page-tickets">
       <div className="container">
-        {/* Page Header (Figma header styles) */}
         <header className="header fade-in" style={{ marginBottom: 12 }}>
           <div>
             <h1 className="header__title">Gestión de Boletos</h1>
-            <p className="header__subtitle">Consulta y administra tus boletos asignados</p>
+            <p className="header__subtitle">Consulta, crea boletos y registra ventas</p>
           </div>
         </header>
 
-        {/* Search */}
+        {successMessage && (
+          <div className="alert alert--success fade-in" style={{ marginBottom: 16, border: '2px solid #16a34a' }}>
+            <span><Icon name="check" className="w-4 h-4" /></span> {successMessage}
+          </div>
+        )}
+
+        {error && (
+          <div className="alert alert--error fade-in" id="ticket-error" style={{ marginBottom: 16 }}>
+            <span><Icon name="warning" className="w-4 h-4" /></span> {error}
+          </div>
+        )}
+
+        {!id && (
+          <>
+            <div className="card fade-in" style={{ marginBottom: 16 }}>
+              <h2 className="card__title" style={{ marginBottom: 12 }}>Registrar boleto</h2>
+
+              <form onSubmit={handleCreateTicket} className="form">
+                <div className="input-group">
+                  <label>Event ID</label>
+                  <input className="input" type="number" value={ticketForm.event_id} onChange={handleTicketFormChange('event_id')} required />
+                </div>
+
+                <div className="input-group">
+                  <label>Owner ID</label>
+                  <input className="input" type="number" value={ticketForm.owner_id} onChange={handleTicketFormChange('owner_id')} required />
+                </div>
+
+                <div className="input-group">
+                  <label>Folio / Subject</label>
+                  <input className="input" value={ticketForm.subject} onChange={handleTicketFormChange('subject')} required />
+                </div>
+
+                <div className="input-group">
+                  <label>Estado</label>
+                  <select className="input" value={ticketForm.status} onChange={handleTicketFormChange('status')}>
+                    <option value="available">Disponible</option>
+                    <option value="sold">Vendido</option>
+                  </select>
+                </div>
+
+                <button type="submit" className="btn btn--green btn--block">Crear boleto</button>
+              </form>
+            </div>
+
+            <div className="card fade-in" style={{ marginBottom: 16 }}>
+              <h2 className="card__title" style={{ marginBottom: 12 }}>Registrar venta</h2>
+
+              <form onSubmit={handleCreateSale} className="form">
+                <div className="input-group">
+                  <label>Ticket ID</label>
+                  <input className="input" type="number" value={saleForm.ticket_id} onChange={handleSaleFormChange('ticket_id')} required />
+                </div>
+
+                <div className="input-group">
+                  <label>Buyer User ID</label>
+                  <input className="input" type="number" value={saleForm.buyer_user_id} onChange={handleSaleFormChange('buyer_user_id')} required />
+                </div>
+
+                <div className="input-group">
+                  <label>Precio</label>
+                  <input className="input" type="number" value={saleForm.price} onChange={handleSaleFormChange('price')} required />
+                </div>
+
+                <div className="input-group">
+                  <label>Moneda</label>
+                  <input className="input" value={saleForm.currency} onChange={handleSaleFormChange('currency')} />
+                </div>
+
+                <div className="input-group">
+                  <label>Estado venta</label>
+                  <select className="input" value={saleForm.status} onChange={handleSaleFormChange('status')}>
+                    <option value="pending">Pendiente</option>
+                    <option value="completed">Completada</option>
+                  </select>
+                </div>
+
+                <button type="submit" className="btn btn--orange btn--block">Registrar venta</button>
+              </form>
+            </div>
+          </>
+        )}
+
         <form className="search-bar fade-in" onSubmit={handleSearch} id="ticket-search-form">
           <input
             type="number"
@@ -120,18 +294,10 @@ export default function Tickets() {
           </button>
         </form>
 
-          {loading && <Loader text="Cargando..." />}
+        {loading && <Loader text="Cargando..." />}
 
-        {error && (
-          <div className="alert alert--error fade-in" id="ticket-error">
-            <span><Icon name="warning" className="w-4 h-4" /></span> {error}
-          </div>
-        )}
-
-        {/* Ticket Detail Card — Figma style */}
         {ticket && !loading && (
           <div className="slide-up">
-            {/* Status Banner */}
             <div className={`status-banner ${
               ticket.estado_venta === 'completed' ? 'status-banner--success' : 'status-banner--warning'
             }`}>
@@ -146,7 +312,6 @@ export default function Tickets() {
               </div>
             </div>
 
-            {/* QR / Ticket Number */}
             <div className="card" id="ticket-detail-card" style={{ textAlign: 'center' }}>
               <h2 style={{ fontWeight: 700, fontSize: '1.25rem', marginBottom: 4 }}>
                 {ticket.folio || `Boleto #${ticket.ticket_id}`}
@@ -174,7 +339,6 @@ export default function Tickets() {
               </div>
             </div>
 
-            {/* Buyer Info */}
             <div className="card">
               <h2 className="card__title" style={{ marginBottom: 16 }}>Información del Comprador</h2>
               <div className="icon-row">
@@ -186,7 +350,6 @@ export default function Tickets() {
               </div>
             </div>
 
-            {/* Sale Details */}
             <div className="card">
               <h2 className="card__title" style={{ marginBottom: 16 }}>Detalles de la Venta</h2>
 
@@ -219,8 +382,6 @@ export default function Tickets() {
           </div>
         )}
 
-        {/* Empty state */}
-        {/* Si no hay id, mostramos listado tipo "My Tickets" */}
         {!id && !loading && !error && (
           <div>
             <div className="tickets-stats-grid mb-4">
@@ -230,7 +391,6 @@ export default function Tickets() {
                   <span className="ticket-list-stat-label">Vendidos</span>
                 </div>
                 <p className="ticket-list-stat-value">{soldCount}/{ticketsList.length}</p>
-                <p className="ticket-list-stat-sub">${amountPaid.toLocaleString('es-MX')} recaudado</p>
               </div>
 
               <div className="ticket-list-card">
@@ -239,23 +399,7 @@ export default function Tickets() {
                   <span className="ticket-list-stat-label">Pendientes</span>
                 </div>
                 <p className="ticket-list-stat-value">{pendingCount}</p>
-                <p className="ticket-list-stat-sub">${amountOwed.toLocaleString('es-MX')} adeudo</p>
               </div>
-            </div>
-
-            {pendingCount > 0 && (
-              <div className="status-banner status-banner--warning mb-4">
-                <div className="status-banner__icon"><Icon name="calendar" className="w-4 h-4" /></div>
-                <div className="status-banner__text">
-                  <strong>Fecha límite de venta</strong>
-                  <span>Tienes {pendingCount} boletos pendientes de pago o venta.</span>
-                </div>
-              </div>
-            )}
-
-            <div className="tickets-tabs mb-4">
-              <button className="tickets-tab active">Vendidos</button>
-              <button className="tickets-tab">Pendientes de pago</button>
             </div>
 
             {ticketsList.length === 0 ? (
@@ -265,28 +409,30 @@ export default function Tickets() {
               </div>
             ) : (
               <div className="space-y-3 mb-4">
-                <h3 className="font-semibold text-gray-700">Boletos Vendidos</h3>
+                <h3 className="font-semibold text-gray-700">Boletos</h3>
                 {ticketsList.map(t => (
                   <div key={t.id || t.ticket_id} onClick={() => navigate(`/boletos/${t.id || t.ticket_id}`)} className="ticket-list-card cursor-pointer">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">Boleto {t.folio || (t.ticket_id || t.id)}</h3>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.estado_venta === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {t.estado_venta === 'completed' ? 'Pagado' : 'Pago pendiente'}
+                          <h3 className="font-semibold">{t.subject || t.folio || `Boleto ${t.id}`}</h3>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.status === 'sold' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {t.status === 'sold' ? 'Vendido' : 'Disponible'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Vendido: {t.created_at ? new Date(t.created_at).toLocaleDateString() : '-'}</div>
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                          Event ID: {t.event_id ?? '-'}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-bold text-gray-900">${Number(t.amount || t.price || 0).toLocaleString('es-MX')}</p>
-                        <p className="text-xs text-gray-500">Token: {t.token || '-'}</p>
+                        <p className="text-lg font-bold text-gray-900">ID {t.id || t.ticket_id}</p>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+
             <div className="mt-4">
               <button onClick={() => navigate('/marketplace/publicar')} className="btn btn--green btn--block">
                 Publicar en Marketplace

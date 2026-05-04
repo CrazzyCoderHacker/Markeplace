@@ -17,9 +17,11 @@ export default function Products() {
     setLoading(true)
     setError(null)
     setProduct(null)
+
     try {
       const result = await getPostDetail(productId)
-      setProduct(result.data)
+      const parsed = result?.data !== undefined ? result.data : result
+      setProduct(parsed)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -53,6 +55,15 @@ export default function Products() {
     return <span className={`badge ${info.cls}`}>{info.text}</span>
   }
 
+  const renderPrice = () => {
+    const rawPrice = product?.price ?? product?.amount
+    if (rawPrice === undefined || rawPrice === null || rawPrice === '') {
+      return 'Sin precio'
+    }
+    const numeric = Number(rawPrice)
+    return Number.isNaN(numeric) ? `${rawPrice} MXN` : `$${numeric.toLocaleString('es-MX')} MXN`
+  }
+
   return (
     <div className="page" id="page-products">
       <div className="container">
@@ -63,7 +74,6 @@ export default function Products() {
           </p>
         </div>
 
-        {/* Search */}
         <form className="search-bar fade-in" onSubmit={handleSearch} id="product-search-form">
           <input
             type="number"
@@ -87,10 +97,8 @@ export default function Products() {
           </div>
         )}
 
-        {/* Product Detail — Figma style */}
         {product && !loading && (
           <div className="slide-up" id="product-detail">
-            {/* Image */}
             <div className="product-detail__image-wrapper" style={{ marginBottom: 16 }}>
               {product.images && product.images.length > 0 ? (
                 <img src={product.images[0].url} alt={product.title} />
@@ -99,22 +107,17 @@ export default function Products() {
               )}
             </div>
 
-            {/* Category tags */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <span className="badge badge--orange">Producto</span>
+              <span className="badge badge--orange">Categoría #{product.category_id}</span>
               {product.includes_ticket && (
                 <span className="badge badge--green"><Icon name="ticket" className="w-3 h-3" /> Incluye boleto</span>
               )}
               {getStatusBadge(product.status)}
             </div>
 
-            {/* Title + Price */}
             <h2 className="product-detail__title">{product.title}</h2>
-            <p className="product-detail__price">
-              ${typeof product.price === 'number' ? product.price.toLocaleString('es-MX') : product.price} MXN
-            </p>
+            <p className="product-detail__price">{renderPrice()}</p>
 
-            {/* Includes ticket banner */}
             {product.includes_ticket && (
               <div className="status-banner status-banner--success" style={{ marginTop: 16 }}>
                 <div className="status-banner__icon"><Icon name="ticket" className="w-4 h-4" /></div>
@@ -125,14 +128,12 @@ export default function Products() {
               </div>
             )}
 
-            {/* Buy Button */}
             <div className="card" style={{ marginTop: 16, padding: 16 }}>
               <button className="btn btn--green btn--block btn--lg" id="product-buy-btn">
                 <Icon name="bag" className="w-4 h-4" /> Comprar ahora
               </button>
             </div>
 
-            {/* Seller */}
             <div className="card">
               <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 8 }}>Vendido por:</p>
               <div className="icon-row" style={{ padding: 0 }}>
@@ -150,7 +151,6 @@ export default function Products() {
               </div>
             </div>
 
-            {/* Additional info */}
             <div className="card">
               <div className="info-row">
                 <span className="info-row__label">ID del producto</span>
@@ -168,7 +168,6 @@ export default function Products() {
               )}
             </div>
 
-            {/* Description */}
             <div className="card">
               <h3 style={{ fontWeight: 700, fontSize: '1.125rem', marginBottom: 12 }}>Descripción</h3>
               <p className="product-detail__description">
@@ -178,14 +177,10 @@ export default function Products() {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && !error && !product && !id && (
           <div className="empty-state fade-in">
             <span className="empty-state__icon"><Icon name="search" /></span>
             <p>Ingresa un ID de producto para consultar su detalle</p>
-            <p style={{ fontSize: '0.75rem', marginTop: 8, color: 'var(--color-text-muted)' }}>
-              Nota: El endpoint actualmente devuelve datos mock
-            </p>
           </div>
         )}
       </div>

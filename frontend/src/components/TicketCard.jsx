@@ -17,14 +17,21 @@ export default function TicketCard(props) {
   const navigate = useNavigate()
   const [idx, setIdx] = useState(0)
 
-  const next = (e) => { e.stopPropagation(); if (images.length>0) setIdx((idx+1)%images.length) }
-  const prev = (e) => { e.stopPropagation(); if (images.length>0) setIdx((idx-1+images.length)%images.length) }
+  const next = (e) => { e.stopPropagation(); if (images.length > 0) setIdx((idx + 1) % images.length) }
+  const prev = (e) => { e.stopPropagation(); if (images.length > 0) setIdx((idx - 1 + images.length) % images.length) }
 
   const toDetails = () => navigate(`/productos/${id}`)
 
+  const renderPrice = () => {
+    if (price === undefined || price === null || price === '' || Number(price) === 0) {
+      return 'Sin precio'
+    }
+    const numeric = Number(price)
+    return Number.isNaN(numeric) ? `${price}` : `$${numeric.toLocaleString('es-MX')}`
+  }
+
   return (
     <div className="ticket-card bg-white rounded-lg shadow-sm overflow-hidden">
-      {/* Image area */}
       <div onClick={toDetails} role="button" aria-label={`Ver ${title}`} className="ticket-card__media relative w-full bg-gray-100 cursor-pointer">
         {images && images.length > 0 ? (
           <img src={images[idx].url || images[idx]} alt={title} className="w-full h-full object-cover" />
@@ -47,7 +54,7 @@ export default function TicketCard(props) {
             </button>
             <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1">
               {images.map((_, i) => (
-                <button key={i} onClick={(e)=>{e.stopPropagation(); setIdx(i)}} className={`${i===idx ? 'bg-white w-6 h-2 rounded-full' : 'bg-white/60 w-2 h-2 rounded-full'}`} />
+                <button key={i} onClick={(e) => { e.stopPropagation(); setIdx(i) }} className={`${i === idx ? 'bg-white w-6 h-2 rounded-full' : 'bg-white/60 w-2 h-2 rounded-full'}`} />
               ))}
             </div>
           </>
@@ -77,7 +84,7 @@ export default function TicketCard(props) {
           {includesTicket && <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full"><Icon name="ticket" className="w-3 h-3" /> Incluye boleto</span>}
         </div>
 
-        <p className="ticket-card__price">${price?.toLocaleString('es-MX')}</p>
+        <p className="ticket-card__price">{renderPrice()}</p>
 
         <div className="flex gap-2">
           <button onClick={toDetails} className="btn btn--orange btn--block">Comprar</button>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createPost, getCategories } from '../api'
+import { createPost, createPostImage, getCategories } from '../api'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 
@@ -27,6 +27,7 @@ export default function CreateListing() {
     categoryId: '',
     description: '',
     status: 'published',
+    imageUrl: '',
   })
 
   useEffect(() => {
@@ -74,7 +75,16 @@ export default function CreateListing() {
         published_at: form.status === 'published' ? new Date().toISOString() : null,
       }
 
-      await createPost(payload)
+      const createdPost = await createPost(payload)
+      const createdPostData = createdPost?.data ?? createdPost
+
+      if (form.imageUrl.trim()) {
+        await createPostImage({
+          post_id: createdPostData.id,
+          url: form.imageUrl.trim(),
+        })
+      }
+
       setSuccess('Publicación creada correctamente')
       setTimeout(() => navigate('/marketplace'), 800)
     } catch (err) {
@@ -98,7 +108,7 @@ export default function CreateListing() {
         <div className="card fade-in">
           <div className="card__header">
             <h2 className="card__title">Nueva publicación</h2>
-            <p className="card__subtitle">Este formulario usa el endpoint real `POST /posts`.</p>
+            <p className="card__subtitle">Este formulario usa el endpoint real POST /posts.</p>
           </div>
 
           {error && (
@@ -161,6 +171,18 @@ export default function CreateListing() {
                 value={form.description}
                 onChange={onChange('description')}
                 placeholder="Describe tu producto o servicio"
+              />
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="listing-image">URL de imagen</label>
+              <input
+                id="listing-image"
+                className="input"
+                type="url"
+                value={form.imageUrl}
+                onChange={onChange('imageUrl')}
+                placeholder="https://ejemplo.com/imagen.jpg"
               />
             </div>
 
