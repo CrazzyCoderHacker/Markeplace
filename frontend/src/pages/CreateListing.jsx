@@ -25,9 +25,11 @@ export default function CreateListing() {
   const [form, setForm] = useState({
     title: '',
     categoryId: '',
+    price: '',
     description: '',
     status: 'published',
     imageUrl: '',
+    includesTicket: false,
   })
 
   useEffect(() => {
@@ -46,16 +48,21 @@ export default function CreateListing() {
   }, [])
 
   const canSubmit = useMemo(() => {
-    return Boolean(user?.id && form.title.trim() && form.categoryId)
+    return Boolean(
+      user?.id &&
+      form.title.trim() &&
+      form.categoryId &&
+      form.description.trim()
+    )
   }, [user, form])
 
   const onChange = (key) => (e) => {
     setError(null)
-    setForm((prev) => ({ ...prev, [key]: e.target.value }))
+    const value = key === 'includesTicket' ? e.target.checked : e.target.value
+    setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const submitWithStatus = async (nextStatus) => {
     if (!canSubmit) return
 
     setLoading(true)
@@ -65,14 +72,17 @@ export default function CreateListing() {
     try {
       const now = Date.now()
       const slugBase = slugify(form.title) || 'publicacion'
+
       const payload = {
         category_id: Number(form.categoryId),
         author_user_id: Number(user.id),
         title: form.title.trim(),
         slug: `${slugBase}-${now}`,
         content: form.description.trim() || null,
-        status: form.status,
-        published_at: form.status === 'published' ? new Date().toISOString() : null,
+        status: nextStatus,
+        published_at: nextStatus === 'published' ? new Date().toISOString() : null,
+        price: form.price !== '' ? Number(form.price) : null,
+        includes_ticket: Boolean(form.includesTicket),
       }
 
       const createdPost = await createPost(payload)
@@ -85,13 +95,25 @@ export default function CreateListing() {
         })
       }
 
-      setSuccess('Publicación creada correctamente')
-      setTimeout(() => navigate('/marketplace'), 800)
+      setSuccess(nextStatus === 'draft'
+        ? 'Borrador guardado correctamente'
+        : 'Publicación creada correctamente')
+
+      setTimeout(() => navigate('/marketplace'), 1000)
     } catch (err) {
       setError(err.message || 'No se pudo crear la publicación')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    await submitWithStatus('published')
+  }
+
+  const handleSaveDraft = async () => {
+    await submitWithStatus('draft')
   }
 
   return (
@@ -106,11 +128,6 @@ export default function CreateListing() {
         </header>
 
         <div className="card fade-in">
-          <div className="card__header">
-            <h2 className="card__title">Nueva publicación</h2>
-            <p className="card__subtitle">Este formulario usa el endpoint real POST /posts.</p>
-          </div>
-
           {error && (
             <div className="alert alert--error">
               <span><Icon name="warning" className="w-4 h-4" /></span>
@@ -127,55 +144,7 @@ export default function CreateListing() {
 
           <form onSubmit={handleSubmit} className="form">
             <div className="input-group">
-              <label htmlFor="listing-title">Título</label>
-              <input
-                id="listing-title"
-                className="input"
-                value={form.title}
-                onChange={onChange('title')}
-                placeholder="Ej: Servicio de diseño"
-                required
-              />
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="listing-category">Categoría</label>
-              <select
-                id="listing-category"
-                className="input"
-                value={form.categoryId}
-                onChange={onChange('categoryId')}
-                required
-              >
-                <option value="">Selecciona categoría</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="listing-status">Estado</label>
-              <select id="listing-status" className="input" value={form.status} onChange={onChange('status')}>
-                <option value="published">Publicado</option>
-                <option value="draft">Borrador</option>
-              </select>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="listing-description">Descripción</label>
-              <textarea
-                id="listing-description"
-                className="textarea"
-                rows={4}
-                value={form.description}
-                onChange={onChange('description')}
-                placeholder="Describe tu producto o servicio"
-              />
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="listing-image">URL de imagen</label>
+              <label htmlFor="listing-image">Imagen (URL por ahora)</label>
               <input
                 id="listing-image"
                 className="input"
@@ -186,9 +155,102 @@ export default function CreateListing() {
               />
             </div>
 
-            <button type="submit" className="btn btn--green btn--block" disabled={!canSubmit || loading}>
-              {loading ? 'Publicando...' : 'Publicar'}
-            </button>
+            <div className="input-group">
+              <label htmlFor="listing-title">Título *</label>
+              <input
+                id="listing-title"
+                className="input"
+                value={form.title}
+                onChange={onChange('title')}
+                placeholder="Ej: iPhone 13 Pro Max 128GB"
+                maxLength={100}
+                required
+              />
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="listing-category">Categoría *</label>
+              <select
+                id="listing-category"
+                className="input"
+                value={form.categoryId}
+                onChange={onChange('categoryId')}
+                required
+              >
+                <option value="">Selecciona una categoría</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="listing-price">Precio (MXN)</label>
+              <input
+                id="listing-price"
+                className="input"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.price}
+                onChange={onChange('price')}
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="listing-description">Descripción *</label>
+              <textarea
+                id="listing-description"
+                className="textarea"
+                rows={5}
+                value={form.description}
+                onChange={onChange('description')}
+                placeholder="Describe tu producto o servicio con detalle..."
+                required
+              />
+            </div>
+
+            <div className="card card--bordered" style={{ padding: 16, marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.includesTicket}
+                  onChange={onChange('includesTicket')}
+                  style={{ marginTop: 4 }}
+                />
+                <div>
+                  <strong>Incluye boleto del sorteo UDLAP</strong>
+                  <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: 4 }}>
+                    Marca esta opción si tu publicación incluye un boleto del sorteo institucional
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              <button type="submit" className="btn btn--green btn--block" disabled={!canSubmit || loading}>
+                {loading ? 'Publicando...' : 'Publicar'}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn--gray btn--block"
+                onClick={handleSaveDraft}
+                disabled={!canSubmit || loading}
+              >
+                Guardar borrador
+              </button>
+
+              <button
+                type="button"
+                className="btn btn--outline btn--block"
+                onClick={() => navigate('/marketplace')}
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+            </div>
           </form>
         </div>
       </div>

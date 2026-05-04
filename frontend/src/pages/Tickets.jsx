@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getTicketDetail, getTickets, createTicket, createTicketSale } from '../api'
+import { getTicketDetail, getTickets, createTicket, createTicketSale, deleteTicket } from '../api'
 import { useAuth } from '../context/AuthContext'
 import Loader from '../components/Loader'
 import Icon from '../components/Icon'
@@ -17,6 +17,16 @@ function getStatusBadge(status) {
   }
   const info = map[status] || { cls: 'badge--gray', label: status }
   return <span className={`badge ${info.cls}`}>{info.label}</span>
+}
+
+function formatTicketTitle(ticket) {
+  const rawId = ticket.id || ticket.ticket_id
+  const fallback = `Boleto #${String(rawId).padStart(3, '0')}`
+  const subject = (ticket.subject || ticket.folio || '').trim()
+
+  if (!subject) return fallback
+  if (/^boleto\s*#/i.test(subject)) return subject
+  return subject
 }
 
 export default function Tickets() {
@@ -91,12 +101,19 @@ export default function Tickets() {
 
   const fetchTicketsList = async () => {
     setLoading(true)
-    setError(null)
     try {
       const res = await getTickets()
       const parsed = res.data !== undefined ? res.data : res
       const list = Array.isArray(parsed) ? parsed : [parsed]
-      setTicketsList(list)
+
+      const sorted = [...list].sort((a, b) => {
+        const aId = Number(a.id || a.ticket_id || 0)
+        const bId = Number(b.id || b.ticket_id || 0)
+        return bId - aId
+      })
+
+      setTicketsList(sorted)
+      setError(null)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -128,7 +145,7 @@ export default function Tickets() {
       const result = await createTicket({
         event_id: Number(ticketForm.event_id),
         owner_id: Number(ticketForm.owner_id),
-        subject: ticketForm.subject,
+        subject: ticketForm.subject.trim(),
         status: ticketForm.status,
       })
 
@@ -144,6 +161,7 @@ export default function Tickets() {
       })
 
       await fetchTicketsList()
+      setError(null)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       setError(err.message || 'No se pudo crear el boleto')
@@ -177,9 +195,26 @@ export default function Tickets() {
       })
 
       await fetchTicketsList()
+      setError(null)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       setError(err.message || 'No se pudo registrar la venta')
+    }
+  }
+
+  const handleDeleteTicket = async (ticketId) => {
+    const confirmed = window.confirm(`¿Seguro que quieres eliminar el boleto ${ticketId}?`)
+    if (!confirmed) return
+
+    setError(null)
+    setSuccessMessage('')
+
+    try {
+      await deleteTicket(ticketId)
+      setSuccessMessage(`Boleto ${ticketId} eliminado correctamente`)
+      await fetchTicketsList()
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el boleto')
     }
   }
 
@@ -212,21 +247,44 @@ export default function Tickets() {
           <>
             <div className="card fade-in" style={{ marginBottom: 16 }}>
               <h2 className="card__title" style={{ marginBottom: 12 }}>Registrar boleto</h2>
+              <p className="card__subtitle" style={{ marginBottom: 16 }}>
+                Usa un Event ID válido: <strong>1, 2 o 3</strong>. El folio puede quedar vacío y se generará automáticamente.
+              </p>
 
               <form onSubmit={handleCreateTicket} className="form">
                 <div className="input-group">
-                  <label>Event ID</label>
-                  <input className="input" type="number" value={ticketForm.event_id} onChange={handleTicketFormChange('event_id')} required />
+                  <label>Event ID válido</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="1"
+                    max="3"
+                    value={ticketForm.event_id}
+                    onChange={handleTicketFormChange('event_id')}
+                    placeholder="1, 2 o 3"
+                    required
+                  />
                 </div>
 
                 <div className="input-group">
                   <label>Owner ID</label>
-                  <input className="input" type="number" value={ticketForm.owner_id} onChange={handleTicketFormChange('owner_id')} required />
+                  <input
+                    className="input"
+                    type="number"
+                    value={ticketForm.owner_id}
+                    onChange={handleTicketFormChange('owner_id')}
+                    required
+                  />
                 </div>
 
                 <div className="input-group">
-                  <label>Folio / Subject</label>
-                  <input className="input" value={ticketForm.subject} onChange={handleTicketFormChange('subject')} required />
+                  <label>Folio / Subject (opcional)</label>
+                  <input
+                    className="input"
+                    value={ticketForm.subject}
+                    onChange={handleTicketFormChange('subject')}
+                    placeholder="Si lo dejas vacío se genera como Boleto #00X"
+                  />
                 </div>
 
                 <div className="input-group">
@@ -411,22 +469,33 @@ export default function Tickets() {
               <div className="space-y-3 mb-4">
                 <h3 className="font-semibold text-gray-700">Boletos</h3>
                 {ticketsList.map(t => (
-                  <div key={t.id || t.ticket_id} onClick={() => navigate(`/boletos/${t.id || t.ticket_id}`)} className="ticket-list-card cursor-pointer">
+                  <div key={t.id || t.ticket_id} className="ticket-list-card">
                     <div className="flex items-start justify-between mb-3">
-                      <div>
+                      <div
+                        onClick={() => navigate(`/boletos/${t.id || t.ticket_id}`)}
+                        className="flex-1 cursor-pointer"
+                      >
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">{t.subject || t.folio || `Boleto ${t.id}`}</h3>
+                          <h3 className="font-semibold">{formatTicketTitle(t)}</h3>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.status === 'sold' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                             {t.status === 'sold' ? 'Vendido' : 'Disponible'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                          Event ID: {t.event_id ?? '-'}
+                        <div className="text-sm text-gray-600 mb-1">
+                          Evento: {t.event_id ?? '-'}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          ID interno: {t.id || t.ticket_id}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-gray-900">ID {t.id || t.ticket_id}</p>
-                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn--outline"
+                        onClick={() => handleDeleteTicket(t.id || t.ticket_id)}
+                      >
+                        Eliminar
+                      </button>
                     </div>
                   </div>
                 ))}

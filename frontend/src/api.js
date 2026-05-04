@@ -68,6 +68,23 @@ export async function createPost(data) {
   return res.json();
 }
 
+/**
+ * Actualizar publicación
+ * Endpoint: PUT /posts/:id
+ */
+export async function updatePost(id, data) {
+  const res = await fetch(`${API_URL}/posts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function deletePost(id) {
   const res = await fetch(`${API_URL}/posts/${id}`, {
     method: 'DELETE',
@@ -123,6 +140,7 @@ export async function getFinancialAccounts(userId) {
   if (!res.ok) throw new Error(`Error ${res.status}`);
   return res.json();
 }
+
 /**
  * Categorías
  * Endpoint: GET /categories
@@ -281,6 +299,21 @@ export async function createTicket(data) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Eliminar boleto
+ * Endpoint: DELETE /tickets/:id
+ */
+export async function deleteTicket(id) {
+  const res = await fetch(`${API_URL}/tickets/${id}`, {
+    method: 'DELETE',
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
